@@ -272,13 +272,13 @@ func CheckResponse(r *http.Response) error {
 type Response struct {
 	*http.Response
 
+	// v3 paging fields
+	IsLast        bool
+	NextPageToken string
+	// v2 paging fields
 	StartAt    int
 	MaxResults int
 	Total      int
-
-	// *searchResultV2
-	IsLast        bool
-	NextPageToken string
 }
 
 func newResponse(r *http.Response, v interface{}) *Response {
@@ -292,9 +292,8 @@ func newResponse(r *http.Response, v interface{}) *Response {
 func (r *Response) populatePageValues(v interface{}) {
 	switch value := v.(type) {
 	case *searchResult:
-		r.StartAt = value.StartAt
-		r.MaxResults = value.MaxResults
-		r.Total = value.Total
+		r.IsLast = value.IsLast
+		r.NextPageToken = value.NextPageToken
 	case *searchResultV2:
 		r.IsLast = value.IsLast
 		r.NextPageToken = value.NextPageToken

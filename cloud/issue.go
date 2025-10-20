@@ -517,15 +517,23 @@ type CommentVisibility struct {
 // A request to a pages API will result in a values array wrapped in a JSON object with some paging metadata
 // Default Pagination options
 type SearchOptions struct {
-	// StartAt: The starting index of the returned projects. Base index: 0.
-	StartAt int `url:"startAt,omitempty"`
+	// NextPageToken: The token for a page to fetch that is not the first page.
+	// The first page has a nextPageToken of null. Use the nextPageToken to fetch the next page of issues.
+	NextPageToken string `url:"nextPageToken,omitempty"`
 	// MaxResults: The maximum number of projects to return per page. Default: 50.
 	MaxResults int `url:"maxResults,omitempty"`
 	// Expand: Expand specific sections in the returned issues
 	Expand string `url:"expand,omitempty"`
+	// Fields: A list of fields to return for each issue, use it to retrieve a subset of fields.
 	Fields []string
-	// ValidateQuery: The validateQuery param offers control over whether to validate and how strictly to treat the validation. Default: strict.
-	ValidateQuery string `url:"validateQuery,omitempty"`
+	// Properties: A list of up to 5 issue properties to include in the results.
+	Properties []string
+	// FieldsByKeys: Reference fields by their key (rather than ID). The default is false.
+	FieldsByKeys bool `url:"fieldsByKeys,omitempty"`
+	// FailFast: Fail this request early if we can't retrieve all field data.
+	FailFast bool `url:"failFast,omitempty"`
+	// ReconcileIssues: Strong consistency issue ids to be reconciled with search results. Accepts max 50 ids.
+	ReconcileIssues []int `url:"reconcileIssues,omitempty"`
 }
 
 // SearchOptionsV2 specifies the parameters for the Jira Cloud-specific
@@ -588,10 +596,9 @@ type SearchOptionsV2 struct {
 // searchResult is only a small wrapper around the Search (with JQL) method
 // to be able to parse the results
 type searchResult struct {
-	Issues     []Issue `json:"issues" structs:"issues"`
-	StartAt    int     `json:"startAt" structs:"startAt"`
-	MaxResults int     `json:"maxResults" structs:"maxResults"`
-	Total      int     `json:"total" structs:"total"`
+	Issues        []Issue `json:"issues"`
+	IsLast        bool    `json:"isLast"`
+	NextPageToken string  `json:"nextPageToken,omitempty"`
 }
 
 // searchResultV2 is only a small wrapper around the Jira Cloud-specific SearchV2 (with JQL) method
@@ -1115,13 +1122,10 @@ func (s *IssueService) AddLink(ctx context.Context, issueLink *IssueLink) (*Resp
 
 // Search will search for tickets according to the jql
 //
-// Jira API docs: https://developer.atlassian.com/jiradev/jira-apis/jira-rest-apis/jira-rest-api-tutorials/jira-rest-api-example-query-issues
-//
-// TODO Double check this method if this works as expected, is using the latest API and the response is complete
-// This double check effort is done for v2 - Remove this two lines if this is completed.
+// Jira API docs: https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/#api-rest-api-3-search-jql-get
 func (s *IssueService) Search(ctx context.Context, jql string, options *SearchOptions) ([]Issue, *Response, error) {
 	u := url.URL{
-		Path: "rest/api/2/search",
+		Path: "rest/api/3/search/jql",
 	}
 	uv := url.Values{}
 	if jql != "" {
@@ -1129,10 +1133,10 @@ func (s *IssueService) Search(ctx context.Context, jql string, options *SearchOp
 	}
 
 	if options != nil {
-		if options.StartAt != 0 {
-			uv.Add("startAt", strconv.Itoa(options.StartAt))
+		if options.NextPageToken != "" {
+			uv.Add("nextPageToken", options.NextPageToken)
 		}
-		if options.MaxResults != 0 {
+		if options.MaxResults > 0 {
 			uv.Add("maxResults", strconv.Itoa(options.MaxResults))
 		}
 		if options.Expand != "" {
@@ -1141,8 +1145,19 @@ func (s *IssueService) Search(ctx context.Context, jql string, options *SearchOp
 		if strings.Join(options.Fields, ",") != "" {
 			uv.Add("fields", strings.Join(options.Fields, ","))
 		}
-		if options.ValidateQuery != "" {
-			uv.Add("validateQuery", options.ValidateQuery)
+		if len(options.Properties) > 0 {
+			uv.Add("properties", strings.Join(options.Properties, ","))
+		}
+		if options.FieldsByKeys {
+			uv.Add("fieldsByKeys", "true")
+		}
+		if options.FailFast {
+			uv.Add("failFast", "true")
+		}
+		if len(options.ReconcileIssues) > 0 {
+			for _, id := range options.ReconcileIssues {
+				uv.Add("reconcileIssues", strconv.Itoa(id))
+			}
 		}
 	}
 
@@ -1238,7 +1253,6 @@ func (s *IssueService) SearchV2JQL(ctx context.Context, jql string, options *Sea
 func (s *IssueService) SearchPages(ctx context.Context, jql string, options *SearchOptions, f func(Issue) error) error {
 	if options == nil {
 		options = &SearchOptions{
-			StartAt:    0,
 			MaxResults: 50,
 		}
 	}
@@ -1264,11 +1278,11 @@ func (s *IssueService) SearchPages(ctx context.Context, jql string, options *Sea
 			}
 		}
 
-		if resp.StartAt+resp.MaxResults >= resp.Total {
+		if resp == nil || resp.IsLast || resp.NextPageToken == "" {
 			return nil
 		}
 
-		options.StartAt += resp.MaxResults
+		options.NextPageToken = resp.NextPageToken
 		issues, resp, err = s.Search(ctx, jql, options)
 		if err != nil {
 			return err
