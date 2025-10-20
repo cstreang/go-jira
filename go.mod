@@ -1,4 +1,4 @@
-module github.com/cstreang/go-jira/v2
+module github.com/cstreang/go-jira
 
 go 1.21
 
