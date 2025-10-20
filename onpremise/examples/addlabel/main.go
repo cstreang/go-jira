@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	jira "github.com/andygrunwald/go-jira/v2/onpremise"
+	jira "github.com/cstreang/go-jira/v2/onpremise"
 )
 
 func main() {
