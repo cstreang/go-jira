@@ -142,6 +142,7 @@ type IssueFields struct {
 	AggregateTimeOriginalEstimate int               `json:"aggregatetimeoriginalestimate,omitempty" structs:"aggregatetimeoriginalestimate,omitempty"`
 	AggregateTimeSpent            int               `json:"aggregatetimespent,omitempty" structs:"aggregatetimespent,omitempty"`
 	AggregateTimeEstimate         int               `json:"aggregatetimeestimate,omitempty" structs:"aggregatetimeestimate,omitempty"`
+    Alias                         interface{}       `json:"alias,omitempty structs:"alias,omitempty"`"`
 	Unknowns                      tcontainer.MarshalMap
 }
 
